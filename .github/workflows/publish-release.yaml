@@ -1,0 +1,76 @@
+name: Publish Release
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          set -x
+
+          yarn --pure-lockfile
+
+          yarn build
+
+          rm -rf node_modules
+
+          yarn --prod --pure-lockfile
+
+          zip -9 -r lambda.zip \
+            node_modules \
+            index.js \
+            index.js.map \
+            index.ts \
+            yarn.lock \
+            package.json \
+            tsconfig.json \
+            README.md \
+            template.yaml \
+            LICENSE
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -x
+
+          RELEASE_TYPE=""
+
+          if [ "true" == "${{ github.event.release.draft }}" ]
+          then
+            RELEASE_TYPE="draft-"
+          fi
+
+          if [ "true" == "${{ github.event.release.prerelease }}" ]
+          then
+            RELEASE_TYPE="$(echo $RELEASE_TYPE)pre"
+          fi
+
+          RELEASE_TYPE="$(echo $RELEASE_TYPE)release"
+
+          for region in us-east-1 eu-west-1
+          do
+            aws s3api put-object --region "$region" \
+              --bucket "github-com-hf-pubpubsub-$region" \
+              --key "$RELEASE_TYPE/cloudformation/${{ github.event.release.tag_name }}" \
+              --content-type application/x-yaml \
+              --body template.yaml
+
+            aws s3api put-object --region "$region" \
+              --bucket "github-com-hf-pubpubsub-$region" \
+              --key "$RELEASE_TYPE/lambda/${{ github.event.release.tag_name }}" \
+              --content-type application/zip \
+              --body lambda.zip
+          done
+
+          gh release upload "${{ github.event.release.tag_name }}" \
+            lambda.zip \
+            template.yaml

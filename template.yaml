@@ -1,0 +1,46 @@
+Parameters:
+  PPubPubSubCodeKey:
+    Type: String
+  PGoogleCloudProjectNumber:
+    Type: String
+  PGoogleCloudWebIdentityPool:
+    Type: String
+  PGoogleCloudWebIdentityPoolAWSProvider:
+    Type: String
+  PGoogleCloudServiceAccountEmail:
+    Type: String
+  PGoogleCloudDefaultProjectId:
+    Type: String
+    Default: ""
+
+Resources:
+  RoleLambdaPubPubSub:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service: lambda.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+  LambdaPubPubSub:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: nodejs14.x
+      Role: !Sub ${RoleLambdaPubPubSub.Arn}
+      Timeout: 60
+      MemorySize: 192
+      Handler: index.handler
+      Code:
+        S3Bucket: !Sub github-com-hf-pubpubsub-${AWS::Region}
+        S3Key: !Sub ${PPubPubSubCodeKey}
+      Environment:
+        Variables:
+          GOOGLE_CLOUD_PROJECT_NUMBER: !Ref PGoogleCloudProjectNumber
+          GOOGLE_CLOUD_WEB_IDENTITY_POOL: !Ref PGoogleCloudWebIdentityPool
+          GOOGLE_CLOUD_WEB_IDENTITY_POOL_AWS_PROVIDER: !Ref PGoogleCloudWebIdentityPoolAWSProvider
+          GOOGLE_CLOUD_SERVICE_ACCOUNT_EMAIL: !Ref PGoogleCloudServiceAccountEmail
+          GOOGLE_CLOUD_DEFAULT_PROJECT_ID: !Ref PGoogleCloudDefaultProjectId
